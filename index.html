@@ -46,12 +46,12 @@
         .btn { padding: 10px 15px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; transition: 0.3s; }
         .btn-add { background: #333; color: white; }
         .btn-confirm { background: #28a745; color: white; padding: 6px 12px; font-size: 12px; }
+        .btn-cancel { background: #dc3545; color: white; padding: 6px 12px; font-size: 12px; margin-left: 5px;}
         .btn-logout { background: var(--salon-pink); color: white; }
         .btn:hover { opacity: 0.8; }
 
         /* Modal & Form Styling */
         #loginPage { max-width: 400px; margin: 100px auto; text-align: center; background: white; padding: 30px; border-radius: 20px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
-        
         .modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000; overflow-y: auto; }
         .modal-content { background:white; width:90%; max-width:500px; margin:2% auto; padding:25px; border-radius:15px; border: 1px solid var(--input-border); }
         
@@ -63,8 +63,6 @@
             outline: none;
             font-size: 15px;
         }
-        input:focus, select:focus { border-color: var(--salon-pink); box-shadow: 0 0 5px rgba(255, 51, 133, 0.2); }
-        
         .style-list-preview {
             background: #fffafa; border: 1px solid #ffe6f0;
             padding: 15px; border-radius: 10px; margin: 10px 0;
@@ -121,40 +119,15 @@
             <optgroup label="Freehand Style">
                 <option value="100">Freehand Style: Straight Back - R100</option>
                 <option value="120">Freehand Style: Straight Up - R120</option>
-                <option value="130">Freehand Style: Fish Bone - R130</option>
                 <option value="150">Freehand Style: Two Line - R150</option>
-                <option value="120">Freehand Style: Benny and Betty - R120</option>
-                <option value="100">Freehand Style: Niddle - R100</option>
             </optgroup>
             <optgroup label="Locks">
                 <option value="250">Locks: Pops Faux Locs - R250</option>
                 <option value="250">Locks: Artificial Dread Locks - R250</option>
-                <option value="300">Locks: Twist Long - R300</option>
-                <option value="400">Locks: Boho Twist - R400</option>
-            </optgroup>
-            <optgroup label="Curls">
-                <option value="250">Curls: Millano Curls - R250</option>
-                <option value="250">Curls: Havanna Curls - R250</option>
-                <option value="250">Curls: Soft Dread - R250</option>
             </optgroup>
             <optgroup label="Carrot Braids">
                 <option value="180">Carrot Braids: Straight Back - R180</option>
                 <option value="250">Carrot Braids: Straight Up - R250</option>
-                <option value="250">Carrot Braids: Fulani Braids Short - R250</option>
-                <option value="280">Carrot Braids: Fulani Braids Long - R280</option>
-                <option value="250">Carrot Braids: Lemonade Short - R250</option>
-                <option value="280">Carrot Braids: Lemonade Long - R280</option>
-                <option value="250">Carrot Braids: Straight Back Side - R250</option>
-            </optgroup>
-            <optgroup label="Knotlex Braids">
-                <option value="200">Knotlex Braids: Knotlex Short - R200</option>
-                <option value="300">Knotlex Braids: Knotlex Long - R300</option>
-            </optgroup>
-            <optgroup label="Goddess Braids">
-                <option value="230">Goddess Braids: Goddess Short - R230</option>
-                <option value="380">Goddess Braids: Goddess Long - R380</option>
-                <option value="250">Goddess Braids: Jumbo Goddess Braids - R250</option>
-                <option value="200">Goddess Braids: Jumbo Braids - R200</option>
             </optgroup>
         </select>
 
@@ -192,7 +165,6 @@
     const db = firebase.firestore();
     let cDay, cWeek, cMonth;
 
-    // LOGIN & AUTH
     function loginAdmin() {
         const e = document.getElementById("adminEmail").value;
         const p = document.getElementById("adminPassword").value;
@@ -211,35 +183,37 @@
         }
     });
 
-    // SYNC FORM
     function updatePriceFromSelection() {
         const select = document.getElementById("wStyle");
-        const price = select.value;
         const styleText = select.options[select.selectedIndex].text;
-        document.getElementById("wPrice").value = price;
+        document.getElementById("wPrice").value = select.value;
         document.getElementById("selectedStyleName").innerText = styleText;
-        document.getElementById("selectedStyleName").style.color = "#333";
     }
 
-    // DASHBOARD LOGIC
     function initRealtime() {
         db.collection("bookings").orderBy("timestamp", "desc").onSnapshot(snap => {
             let html = "";
             snap.forEach(doc => {
                 const d = doc.data();
+                const styleName = (d.styles && d.styles.length > 0) ? d.styles[0].name : "N/A";
+                const phone = d.customerPhone || 'N/A';
+
                 html += `<tr>
                     <td><b>${d.customerName}</b></td>
-                    <td>${d.contact || 'N/A'}</td>
-                    <td>${d.style}</td>
+                    <td>${phone}</td>
+                    <td>${styleName}</td>
                     <td style="color:var(--salon-pink); font-weight:bold;">R${d.total}</td>
-                    <td><button class="btn btn-confirm" onclick="confirmBooking('${doc.id}')">Confirm Made</button></td>
+                    <td>
+                        <button class="btn btn-confirm" onclick="confirmBooking('${doc.id}')">Confirm Made</button>
+                        <button class="btn btn-cancel" onclick="cancelBooking('${doc.id}')">Cancel</button>
+                    </td>
                 </tr>`;
             });
             document.getElementById("bookingTable").innerHTML = html;
         });
 
         db.collection("actual_sales").onSnapshot(snap => {
-            let dayTotal = 0, weekTotal = 0, monthTotal = 0;
+            let dTotal = 0, wTotal = 0, mTotal = 0;
             const now = new Date();
             const stylesCount = {};
 
@@ -248,101 +222,106 @@
                 const dDate = new Date(d.date);
                 const amt = Number(d.total);
 
-                if(dDate.toDateString() === now.toDateString()) dayTotal += amt;
+                if(dDate.toDateString() === now.toDateString()) dTotal += amt;
                 const diffDays = Math.ceil((now - dDate) / (1000 * 3600 * 24));
-                if(diffDays <= 7) weekTotal += amt;
+                if(diffDays <= 7) wTotal += amt;
                 if(dDate.getMonth() === now.getMonth() && dDate.getFullYear() === now.getFullYear()) {
-                    monthTotal += amt;
+                    mTotal += amt;
                     stylesCount[d.style] = (stylesCount[d.style] || 0) + 1;
                 }
             });
 
-            document.getElementById("dayRev").innerText = "R" + dayTotal;
-            document.getElementById("weekRev").innerText = "R" + weekTotal;
-            document.getElementById("monthRev").innerText = "R" + monthTotal;
-            renderCharts(stylesCount, dayTotal, weekTotal, monthTotal);
+            document.getElementById("dayRev").innerText = "R" + dTotal;
+            document.getElementById("weekRev").innerText = "R" + wTotal;
+            document.getElementById("monthRev").innerText = "R" + mTotal;
+            renderCharts(stylesCount, dTotal, wTotal, mTotal);
         });
     }
 
     async function confirmBooking(id) {
-        const snapshot = await db.collection("bookings").doc(id).get();
-        const data = snapshot.data();
-        await db.collection("actual_sales").add({
-            customerName: data.customerName,
-            style: data.style,
-            total: data.total,
-            contact: data.contact || "N/A",
-            date: new Date().toISOString().split('T')[0],
-            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        await db.collection("bookings").doc(id).delete();
+        try {
+            const snap = await db.collection("bookings").doc(id).get();
+            const data = snap.data();
+            const styleName = (data.styles && data.styles.length > 0) ? data.styles[0].name : "Booking Style";
+
+            await db.collection("actual_sales").add({
+                customerName: data.customerName,
+                style: styleName,
+                total: Number(data.total),
+                contact: data.customerPhone || "N/A",
+                date: new Date().toISOString().split('T')[0],
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            await db.collection("bookings").doc(id).delete();
+        } catch (e) { alert("Error: " + e.message); }
+    }
+
+    async function cancelBooking(id) {
+        if(confirm("Are you sure you want to cancel and remove this record?")) {
+            await db.collection("bookings").doc(id).delete();
+        }
     }
 
     async function saveManualWork() {
-        const select = document.getElementById("wStyle");
-        const styleName = select.options[select.selectedIndex].text;
+        const styleName = document.getElementById("selectedStyleName").innerText;
         const selectedDateTime = document.getElementById("wDateTime").value;
-        
-        if(!selectedDateTime) return alert("Please select a date and time");
+        const name = document.getElementById("wName").value;
+        const price = document.getElementById("wPrice").value;
 
-        const data = {
-            customerName: document.getElementById("wName").value,
-            contact: document.getElementById("wContact").value,
-            style: styleName,
-            total: Number(document.getElementById("wPrice").value),
-            date: selectedDateTime.split('T')[0], // Extract just the date for calculations
-            fullTimestamp: selectedDateTime,
-            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-        };
-        
-        if(!data.customerName || data.total <= 0) return alert("Please enter Name and select a Style");
-        
-        await db.collection("actual_sales").add(data);
-        closeModal();
+        if(!selectedDateTime || !name || !price || styleName === "No styles added.") {
+            return alert("Fill in all details please.");
+        }
+
+        try {
+            await db.collection("actual_sales").add({
+                customerName: name,
+                contact: document.getElementById("wContact").value || "N/A",
+                style: styleName,
+                total: Number(price),
+                date: selectedDateTime.split('T')[0],
+                fullTimestamp: selectedDateTime,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            closeModal();
+        } catch (e) { alert("Error: " + e.message); }
     }
 
     function renderCharts(styleMap, d, w, m) {
-        const baseOptions = { maintainAspectRatio: false, plugins: { legend: { display: false } } };
+        const opt = { maintainAspectRatio: false, plugins: { legend: { display: false } } };
         
         if(cDay) cDay.destroy();
         cDay = new Chart(document.getElementById('chartDay'), {
             type: 'bar',
-            data: { labels: ['Today\'s Cash'], datasets: [{ data: [d], backgroundColor: '#ff3385' }] },
-            options: { ...baseOptions, plugins: { title: { display: true, text: 'DAILY PERFORMANCE (R)' } } }
+            data: { labels: ['Today'], datasets: [{ data: [d], backgroundColor: '#ff3385' }] },
+            options: { ...opt, plugins: { title: { display: true, text: 'DAILY REVENUE' } } }
         });
 
         if(cWeek) cWeek.destroy();
         cWeek = new Chart(document.getElementById('chartWeek'), {
             type: 'bar',
-            data: { labels: ['Weekly Total'], datasets: [{ data: [w], backgroundColor: '#333' }] },
-            options: { ...baseOptions, plugins: { title: { display: true, text: 'WEEKLY MOMENTUM (R)' } } }
+            data: { labels: ['7-Day Trend'], datasets: [{ data: [w], backgroundColor: '#333' }] },
+            options: { ...opt, plugins: { title: { display: true, text: 'WEEKLY REVENUE' } } }
         });
 
         if(cMonth) cMonth.destroy();
         cMonth = new Chart(document.getElementById('chartMonth'), {
             type: 'doughnut',
-            data: { 
-                labels: Object.keys(styleMap), 
-                datasets: [{ data: Object.values(styleMap), backgroundColor: ['#ff3385','#333','#ff99c2','#666','#ffb3d1','#999'] }] 
-            },
-            options: { ...baseOptions, plugins: { legend: { display: true, position: 'bottom' }, title: { display: true, text: 'MONTHLY STYLE POPULARITY' } } }
+            data: { labels: Object.keys(styleMap), datasets: [{ data: Object.values(styleMap), backgroundColor: ['#ff3385','#333','#ff99c2','#666','#ffb3d1','#999'] }] },
+            options: { ...opt, plugins: { legend: { display: true, position: 'bottom' }, title: { display: true, text: 'STYLE POPULARITY' } } }
         });
     }
 
     function openModal() { 
         document.getElementById("workModal").style.display="block"; 
-        // Set default time to right now
         const now = new Date();
         now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
         document.getElementById('wDateTime').value = now.toISOString().slice(0,16);
     }
     
     function closeModal() { 
-        document.getElementById("workModal").style.display="none"; 
-        document.getElementById("selectedStyleName").innerText = "No styles added.";
+        document.getElementById("workModal").style.display="none";
         document.getElementById("wName").value = "";
         document.getElementById("wContact").value = "";
-        document.getElementById("wPrice").value = "";
     }
 </script>
 </body>
