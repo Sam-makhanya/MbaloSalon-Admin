@@ -25,7 +25,7 @@
         }
         @media (min-width: 768px) { .top-bar { flex-direction: row; justify-content: space-between; } }
 
-        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 20px; }
         .kpi-card { background: var(--white); padding: 20px; border-radius: 15px; text-align: center; border-bottom: 4px solid var(--salon-pink); }
         .kpi-card h3 { font-size: 12px; color: #888; text-transform: uppercase; }
         .kpi-card h2 { color: var(--salon-pink); font-size: 28px; margin-top: 5px; }
@@ -67,6 +67,7 @@
     </div>
 
     <div class="kpi-grid">
+        <div class="kpi-card"><h3>Current Daily Revenue</h3><h2 id="dayRev">R0</h2></div>
         <div class="kpi-card"><h3>Current Weekly Revenue</h3><h2 id="weekRev">R0</h2></div>
         <div class="kpi-card"><h3>Current Monthly Revenue</h3><h2 id="monthRev">R0</h2></div>
     </div>
@@ -89,10 +90,7 @@
 <div id="workModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000;">
     <div style="background:white; width:95%; max-width:500px; margin:30px auto; padding:25px; border-radius:15px; max-height: 90vh; overflow-y: auto;">
         <h2 style="text-align:center; color: var(--salon-pink);">Record Daily Work</h2>
-        
-        <label>Customer Name</label>
-        <input type="text" id="wName">
-
+        <label>Customer Name</label><input type="text" id="wName">
         <label>Choose a Style</label>
         <select id="wStyle">
             <option value="0">-- Choose a Style --</option>
@@ -123,13 +121,8 @@
             <option value="250">Goddess Braids: Jumbo Goddess Braids - R250</option>
             <option value="200">Goddess Braids: Jumbo Braids - R200</option>
         </select>
-        
-        <label>Date</label>
-        <input type="date" id="wDate">
-
-        <label>Time Came</label>
-        <input type="time" id="wTime">
-        
+        <label>Date</label><input type="date" id="wDate">
+        <label>Time Came</label><input type="time" id="wTime">
         <button class="btn btn-logout" style="width:100%; margin-top:20px;" onclick="saveManualWork()">Confirm & Save to Income</button>
         <button onclick="closeModal()" style="width:100%; margin-top:10px; border:none; background:none; cursor:pointer; color:#777;">Cancel</button>
     </div>
@@ -154,7 +147,6 @@
     const db = firebase.firestore();
     let cWeek, cYear, cStyle;
 
-    // Login logic
     function loginAdmin() {
         const e = document.getElementById("adminEmail").value;
         const p = document.getElementById("adminPassword").value;
@@ -162,7 +154,6 @@
     }
     function logoutAdmin() { auth.signOut(); }
 
-    // Authentication Observer
     auth.onAuthStateChanged(user => {
         if(user) {
             document.getElementById("loginPage").style.display = "none";
@@ -175,7 +166,6 @@
     });
 
     function initRealtime() {
-        // Bookings Table
         db.collection("bookings").orderBy("timestamp", "desc").onSnapshot(snap => {
             let html = "";
             snap.forEach(doc => {
@@ -188,13 +178,13 @@
             document.getElementById("bookingTable").innerHTML = html;
         });
 
-        // Revenue & Charts
         db.collection("actual_sales").onSnapshot(snap => {
             const now = new Date();
+            const todayStr = now.toISOString().split('T')[0];
             const weekSales = [0,0,0,0,0,0,0];
             const yearSales = Array(12).fill(0);
             const styleMap = {};
-            let weekTotal = 0, monthTotal = 0;
+            let dayTotal = 0, weekTotal = 0, monthTotal = 0;
 
             snap.forEach(doc => {
                 const d = doc.data();
@@ -202,11 +192,16 @@
                 const amt = Number(d.total) || 0;
                 styleMap[d.style] = (styleMap[d.style] || 0) + 1;
 
+                // Daily Revenue
+                if(d.date === todayStr) dayTotal += amt;
+
+                // Monthly Revenue
                 if(dDate.getFullYear() === now.getFullYear()) {
                     yearSales[dDate.getMonth()] += amt;
                     if(dDate.getMonth() === now.getMonth()) monthTotal += amt;
                 }
 
+                // Weekly Revenue
                 const startOfWeek = new Date(now);
                 startOfWeek.setDate(now.getDate() - (now.getDay() === 0 ? 6 : now.getDay() - 1));
                 startOfWeek.setHours(0,0,0,0);
@@ -219,6 +214,7 @@
                 }
             });
 
+            document.getElementById("dayRev").innerText = "R" + dayTotal;
             document.getElementById("weekRev").innerText = "R" + weekTotal;
             document.getElementById("monthRev").innerText = "R" + monthTotal;
             updateCharts(weekSales, yearSales, styleMap);
@@ -236,7 +232,7 @@
         if(cYear) cYear.destroy();
         cYear = new Chart(document.getElementById('chartYear'), {
             type: 'line',
-            data: { labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], datasets: [{ data: yearData, borderColor: '#333', fill: true }] },
+            data: { labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], datasets: [{ data: yearData, borderColor: '#333', fill: true, tension: 0.3 }] },
             options: { ...opt, plugins: { title: { display: true, text: 'MONTHLY TREND' } } }
         });
         if(cStyle) cStyle.destroy();
@@ -247,7 +243,6 @@
         });
     }
 
-    // FIX: Updated Timestamp call for Compat mode
     async function confirmBooking(id) {
         try {
             const snap = await db.collection("bookings").doc(id).get();
@@ -267,7 +262,6 @@
         if(confirm("Cancel this booking?")) await db.collection("bookings").doc(id).delete();
     }
 
-    // FIX: Updated Timestamp call for Compat mode
     async function saveManualWork() {
         const name = document.getElementById("wName").value;
         const styleSelect = document.getElementById("wStyle");
